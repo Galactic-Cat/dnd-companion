@@ -22,7 +22,7 @@ function render() {
       <h2>HP</h2>
       <div>
         <button id="hp-minus">-</button>
-        <span id="hp-display">${state.currentHP} / ${state.maxHP}</span>
+        <span id="hp-display">${state.hp.current} / ${state.hp.max}</span>
         <button id="hp-plus">+</button>
       </div>
     </div>

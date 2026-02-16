@@ -1,33 +1,63 @@
+class HitPoints {
+  readonly current: number;
+  readonly max: number;
+
+  constructor(current: number, max: number) {
+    this.max = Math.max(0, max);
+    this.current = Math.max(0, Math.min(this.max, current));
+  }
+
+  adjust(delta: number): HitPoints {
+    return new HitPoints(this.current + delta, this.max);
+  }
+
+  setMax(newMax: number): HitPoints {
+    return new HitPoints(this.current, newMax);
+  }
+}
+
 export type GameState = {
-  maxHP: number;
-  currentHP: number;
+  hp: HitPoints;
   spellSlots: number[];
   usedSlots: number[];
 };
 
+const DEFAULT_SPELL_SLOTS = [4, 3, 3, 3, 1, 0, 0, 0, 0];
+const DEFAULT_USED_SLOTS = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+
 export function createInitialState(): GameState {
   const maxHP = Number(localStorage.getItem('maxHP')) || 40;
   const currentHP = Number(localStorage.getItem('currentHP')) || maxHP;
-  const spellSlots = JSON.parse(localStorage.getItem('spellSlots') || '[4,3,3,3,1,0,0,0,0]');
-  const usedSlots = JSON.parse(localStorage.getItem('usedSlots') || '[0,0,0,0,0,0,0,0,0]');
-  return { maxHP, currentHP, spellSlots, usedSlots };
+  const hp = new HitPoints(currentHP, maxHP);
+
+  let spellSlots = DEFAULT_SPELL_SLOTS;
+  let usedSlots = DEFAULT_USED_SLOTS;
+
+  try {
+    const storedSpellSlots = localStorage.getItem('spellSlots');
+    const storedUsedSlots = localStorage.getItem('usedSlots');
+    if (storedSpellSlots) spellSlots = JSON.parse(storedSpellSlots);
+    if (storedUsedSlots) usedSlots = JSON.parse(storedUsedSlots);
+  } catch (e) {
+    console.error('Failed to load game state from localStorage', e);
+  }
+
+  return { hp, spellSlots, usedSlots };
 }
 
 export function saveState(state: GameState) {
-  localStorage.setItem('maxHP', String(state.maxHP));
-  localStorage.setItem('currentHP', String(state.currentHP));
+  localStorage.setItem('maxHP', String(state.hp.max));
+  localStorage.setItem('currentHP', String(state.hp.current));
   localStorage.setItem('spellSlots', JSON.stringify(state.spellSlots));
   localStorage.setItem('usedSlots', JSON.stringify(state.usedSlots));
 }
 
 export function updateHP(state: GameState, delta: number): GameState {
-  const newHP = Math.max(0, Math.min(state.maxHP, state.currentHP + delta));
-  return { ...state, currentHP: newHP };
+  return { ...state, hp: state.hp.adjust(delta) };
 }
 
 export function setMaxHP(state: GameState, maxHP: number): GameState {
-  const newCurrentHP = Math.min(state.currentHP, maxHP);
-  return { ...state, maxHP, currentHP: newCurrentHP };
+  return { ...state, hp: state.hp.setMax(maxHP) };
 }
 
 export function updateSpellSlot(state: GameState, level: number, delta: number): GameState {
