@@ -1,19 +1,9 @@
 import './style.css';
-import {
-  type GameState,
-  createInitialState,
-  saveState,
-  updateHP,
-  setMaxHP,
-  castSpell,
-  regainSpell,
-  setSpellSlotTotal,
-  setSpellLevels,
-  type SlotGroup // Import this if you want explicit typing in maps, optional
-} from './game';
+import { Game } from './game';
+import type { SpellLevel } from './game/spellslots';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
-let state: GameState = createInitialState();
+const game: Game = Game.createInitial();
 
 function render() {
   app.innerHTML = `
@@ -25,7 +15,7 @@ function render() {
         <h2>HP</h2>
         <div class="hp-controls">
           <button id="hp-minus">-</button>
-          <span id="hp-display">${state.hp.current} / ${state.hp.max}</span>
+          <span id="hp-display">${game.state.health.current} / ${game.state.health.maximum}</span>
           <button id="hp-plus">+</button>
         </div>
       </div>
@@ -42,18 +32,18 @@ function render() {
             </tr>
           </thead>
           <tbody>
-            ${state.spells.levels.map((slot: SlotGroup, i) => `
+            ${game.state.spellSlots.levels.map((level: SpellLevel, i) => `
               <tr>
                 <td>${i + 1}</td>
-                <td>${slot.total}</td>
+                <td>${level.total}</td>
                 <td>
-                  <span class="slot-used ${slot.used >= slot.total ? 'depleted' : ''}">
-                    ${slot.used}
+                  <span class="slot-used ${level.used >= level.total ? 'depleted' : ''}">
+                    ${level.used}
                   </span>
                 </td>
                 <td>
-                  <button class="slot-btn slot-minus" data-level="${i}" ${slot.used <= 0 ? 'disabled' : ''}>Regain</button>
-                  <button class="slot-btn slot-plus" data-level="${i}" ${slot.used >= slot.total ? 'disabled' : ''}>Cast</button>
+                  <button class="slot-btn slot-minus" data-level="${i + 1}" ${level.used <= 0 ? 'disabled' : ''}>Regain</button>
+                  <button class="slot-btn slot-plus" data-level="${i + 1}" ${level.used >= level.total ? 'disabled' : ''}>Cast</button>
                 </td>
               </tr>
             `).join('')}
@@ -67,20 +57,20 @@ function render() {
           
           <div class="config-row">
             <label>Max HP:</label>
-            <input type="number" min="1" value="${state.hp.max}" id="max-hp-input" />
+            <input type="number" min="1" value="${game.state.health.maximum}" id="max-hp-input" />
           </div>
 
           <div class="config-row">
             <label>Spell Levels:</label>
-            <input type="number" min="1" max="9" value="${state.spells.levels.length}" id="levels-input" />
+            <input type="number" min="1" max="9" value="${game.state.spellSlots.levels.length}" id="levels-input" />
           </div>
 
           <h4>Spell Slot Totals</h4>
           <div class="config-slots-grid">
-            ${state.spells.levels.map((slot, i) => `
+            ${game.state.spellSlots.levels.map((level, i) => `
               <div class="config-slot-item">
                 <label>Lvl ${i + 1}</label>
-                <input type="number" min="0" value="${slot.total}" class="config-slot-total" data-level="${i}" />
+                <input type="number" min="0" value="${level.total}" class="config-slot-total" data-level="${i}" />
               </div>
             `).join('')}
           </div>
@@ -98,21 +88,23 @@ function render() {
 
   // HP Controls
   document.getElementById('hp-minus')!.onclick = () => {
-    state = updateHP(state, -1);
-    saveState(state);
+    game.damage(1)
+    game.save();
     render();
   };
+
   document.getElementById('hp-plus')!.onclick = () => {
-    state = updateHP(state, 1);
-    saveState(state);
+    game.heal(1);
+    game.save();
     render();
   };
 
   document.querySelectorAll('.slot-minus').forEach(btn => {
     (btn as HTMLButtonElement).onclick = () => {
       const level = Number((btn as HTMLElement).dataset.level);
-      state = regainSpell(state, level);
-      saveState(state);
+      
+      game.regainSpellSlot(level);
+      game.save();
       render();
     };
   });
@@ -120,43 +112,52 @@ function render() {
   document.querySelectorAll('.slot-plus').forEach(btn => {
     (btn as HTMLButtonElement).onclick = () => {
       const level = Number((btn as HTMLElement).dataset.level);
-      state = castSpell(state, level);
-      saveState(state);
+
+      game.cast(level);
+      game.save();
       render();
     };
   });
 
   document.getElementById('configure-top')!.onclick = () => {
     const section = document.querySelector('.config-section') as HTMLElement;
+
     section.style.display = 'flex';
   };
 
-  const hpInput = document.getElementById('max-hp-input') as HTMLInputElement;
-  hpInput.onchange = () => {
-    state = setMaxHP(state, Number(hpInput.value));
-    render(); 
+  const maximumHealthInput = document.getElementById('max-hp-input') as HTMLInputElement;
+
+  maximumHealthInput.onchange = () => {
+    game.setMaximumHealth(Number(maximumHealthInput.value))
+    render();
+
     (document.querySelector('.config-section') as HTMLElement).style.display = 'flex';
   };
 
   const levelsInput = document.getElementById('levels-input') as HTMLInputElement;
+
   levelsInput.onchange = () => {
-    state = setSpellLevels(state, Number(levelsInput.value));
+    game.setSpellLevels(Number(levelsInput.value));
     render();
+
     (document.querySelector('.config-section') as HTMLElement).style.display = 'flex';
   };
 
   document.querySelectorAll('.config-slot-total').forEach(input => {
     (input as HTMLInputElement).onchange = () => {
       const level = Number((input as HTMLElement).dataset.level);
-      const val = Number((input as HTMLInputElement).value);
-      state = setSpellSlotTotal(state, level, val);
+      const value = Number((input as HTMLInputElement).value);
+
+      game.setTotalSpellSlots(level, value);
       render();
+
       (document.querySelector('.config-section') as HTMLElement).style.display = 'flex';
     };
   });
 
   document.getElementById('save-config')!.onclick = () => {
-    saveState(state);
+    game.save();
+
     const section = document.querySelector('.config-section') as HTMLElement;
     section.style.display = 'none';
   };
