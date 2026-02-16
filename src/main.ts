@@ -31,11 +31,11 @@ function render() {
       <table class="spell-table">
         <thead><tr><th>Level</th><th>Total</th><th>Used</th><th>Actions</th></tr></thead>
         <tbody>
-          ${state.spellSlots.map((total:number, i:number) => `
+          ${state.spells.totals.map((total:number, i:number) => `
             <tr>
               <td>${i+1}</td>
               <td>${total}</td>
-              <td><span class="slot-used" id="used-${i}">${state.usedSlots[i]}</span></td>
+              <td><span class="slot-used" id="used-${i}">${state.spells.used[i]}</span></td>
               <td>
                 <button class="slot-minus" data-level="${i}">-</button>
                 <button class="slot-plus" data-level="${i}">+</button>
@@ -87,11 +87,11 @@ function render() {
     function renderConfig() {
       section.innerHTML = `
         <h3>Configure Companion</h3>
-        <label>Max HP: <input type="number" min="1" value="${configState.maxHP}" id="max-hp-input" /></label>
-        <label>Spell Levels: <input type="number" min="1" max="9" value="${configState.spellSlots.length}" id="levels-input" /></label>
+        <label>Max HP: <input type="number" min="1" value="${configState.hp.max}" id="max-hp-input" /></label>
+        <label>Spell Levels: <input type="number" min="1" max="9" value="${configState.spells.totals.length}" id="levels-input" /></label>
         <div>
           <h4>Spell Slot Totals</h4>
-          ${configState.spellSlots.map((total:number, i:number) => `
+          ${configState.spells.totals.map((total:number, i:number) => `
             <label>Level ${i+1}: <input type="number" min="0" value="${total}" class="config-slot-total" data-level="${i}" /></label>
           `).join('')}
         </div>
