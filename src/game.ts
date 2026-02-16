@@ -1,4 +1,4 @@
-class HitPoints {
+export class HitPoints {
   readonly current: number;
   readonly max: number;
 
@@ -16,37 +16,68 @@ class HitPoints {
   }
 }
 
+export type SlotGroup = {
+  readonly total: number;
+  readonly used: number;
+};
+
 export class SpellSlots {
-  readonly totals: number[];
-  readonly used: number[];
+  readonly levels: ReadonlyArray<SlotGroup>;
 
-  constructor(totals: number[], used: number[]) {
-    this.totals = [...totals];
-    // Ensure used slots do not exceed totals and are not negative
-    this.used = this.totals.map((max, i) => Math.max(0, Math.min(max, used[i] || 0)));
+  constructor(levels: SlotGroup[]) {
+    this.levels = levels.map((slot) => ({
+      total: Math.max(0, slot.total),
+      used: Math.max(0, Math.min(slot.total, slot.used)),
+    }));
   }
 
-  adjust(level: number, delta: number): SpellSlots {
-    if (level < 0 || level >= this.totals.length) return this;
-    const newUsed = [...this.used];
-    newUsed[level] += delta;
-    return new SpellSlots(this.totals, newUsed);
+  cast(levelIdx: number): SpellSlots {
+    return this.adjustUsed(levelIdx, 1);
   }
 
-  setTotal(level: number, total: number): SpellSlots {
-    if (level < 0) return this;
-    const newTotals = [...this.totals];
-    while (newTotals.length <= level) newTotals.push(0);
-    newTotals[level] = total;
-    return new SpellSlots(newTotals, this.used);
+  regain(levelIdx: number): SpellSlots {
+    return this.adjustUsed(levelIdx, -1);
+  }
+
+  adjust(levelIdx: number, delta: number): SpellSlots {
+    return this.adjustUsed(levelIdx, delta);
+  }
+
+  setTotal(levelIdx: number, total: number): SpellSlots {
+    if (levelIdx < 0) return this;
+    
+    const newLevels = this.padLevels(Math.max(this.levels.length, levelIdx + 1));
+    
+    newLevels[levelIdx] = { ...newLevels[levelIdx], total };
+    
+    return new SpellSlots(newLevels);
   }
 
   setLevels(count: number): SpellSlots {
-    const newTotals = this.totals.slice(0, count);
-    const newUsed = this.used.slice(0, count);
-    while (newTotals.length < count) newTotals.push(0);
-    while (newUsed.length < count) newUsed.push(0);
-    return new SpellSlots(newTotals, newUsed);
+    return new SpellSlots(this.padLevels(count).slice(0, count));
+  }
+
+  private adjustUsed(levelIdx: number, delta: number): SpellSlots {
+    if (levelIdx < 0 || levelIdx >= this.levels.length) return this;
+
+    const newLevels = [...this.levels];
+    const current = newLevels[levelIdx];
+
+    newLevels[levelIdx] = {
+      ...current,
+      used: current.used + delta, 
+      // Note: The constructor will clamp this value automatically
+    };
+
+    return new SpellSlots(newLevels);
+  }
+
+  private padLevels(count: number): SlotGroup[] {
+    const newLevels = [...this.levels];
+    while (newLevels.length < count) {
+      newLevels.push({ total: 0, used: 0 });
+    }
+    return newLevels;
   }
 }
 
@@ -55,34 +86,35 @@ export type GameState = {
   spells: SpellSlots;
 };
 
-const DEFAULT_SPELL_SLOTS = [4, 3, 3, 3, 1, 0, 0, 0, 0];
-const DEFAULT_USED_SLOTS = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+const DEFAULT_SLOTS: SlotGroup[] = [
+  { total: 4, used: 0 }, { total: 3, used: 0 },
+];
 
 export function createInitialState(): GameState {
   const maxHP = Number(localStorage.getItem('maxHP')) || 40;
   const currentHP = Number(localStorage.getItem('currentHP')) || maxHP;
-  const hp = new HitPoints(currentHP, maxHP);
 
-  let spellSlots = DEFAULT_SPELL_SLOTS;
-  let usedSlots = DEFAULT_USED_SLOTS;
+  let spellSlots = DEFAULT_SLOTS;
 
   try {
-    const storedSpellSlots = localStorage.getItem('spellSlots');
-    const storedUsedSlots = localStorage.getItem('usedSlots');
-    if (storedSpellSlots) spellSlots = JSON.parse(storedSpellSlots);
-    if (storedUsedSlots) usedSlots = JSON.parse(storedUsedSlots);
+    const stored = localStorage.getItem('spellSlots');
+    if (stored) {
+      spellSlots = JSON.parse(stored);
+    }
   } catch (e) {
-    console.error('Failed to load game state from localStorage', e);
+    console.error('Failed to load spell slots, reverting to default', e);
   }
 
-  return { hp, spells: new SpellSlots(spellSlots, usedSlots) };
+  return {
+    hp: new HitPoints(currentHP, maxHP),
+    spells: new SpellSlots(spellSlots),
+  };
 }
 
 export function saveState(state: GameState) {
   localStorage.setItem('maxHP', String(state.hp.max));
   localStorage.setItem('currentHP', String(state.hp.current));
-  localStorage.setItem('spellSlots', JSON.stringify(state.spells.totals));
-  localStorage.setItem('usedSlots', JSON.stringify(state.spells.used));
+  localStorage.setItem('spellSlots', JSON.stringify(state.spells.levels));
 }
 
 export function updateHP(state: GameState, delta: number): GameState {
@@ -93,8 +125,12 @@ export function setMaxHP(state: GameState, maxHP: number): GameState {
   return { ...state, hp: state.hp.setMax(maxHP) };
 }
 
-export function updateSpellSlot(state: GameState, level: number, delta: number): GameState {
-  return { ...state, spells: state.spells.adjust(level, delta) };
+export function castSpell(state: GameState, level: number): GameState {
+  return { ...state, spells: state.spells.cast(level) };
+}
+
+export function regainSpell(state: GameState, level: number): GameState {
+    return { ...state, spells: state.spells.regain(level) };
 }
 
 export function setSpellSlotTotal(state: GameState, level: number, total: number): GameState {
